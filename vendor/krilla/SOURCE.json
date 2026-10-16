@@ -152,7 +152,7 @@
     {
       "path": "src/graphics/color.rs",
       "upstream_sha256": "e5843d33ef184ab5c458025d1b1dc53df6ee6aaf085595ea14604d080b98f8a4",
-      "sha256": "e5843d33ef184ab5c458025d1b1dc53df6ee6aaf085595ea14604d080b98f8a4"
+      "sha256": "e4798f4d3c195341ad1417c0c03897cde59fdcaa484a8097cbf50f1633cbc274"
     },
     {
       "path": "src/graphics/graphic.rs",

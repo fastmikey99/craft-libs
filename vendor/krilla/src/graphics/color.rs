@@ -146,7 +146,7 @@ impl RegularColor {
     pub(crate) fn as_rgb(self) -> Option<rgb::Color> {
         Some(match self {
             Self::Rgb(r) => r,
-            Self::Luma(l) => rgb::Color::new(l.0, l.0, l.0),
+            Self::Luma(l) => rgb::Color::from_normalized([l.0; 3]),
             Self::Cmyk(_) => return None,
         })
     }
@@ -169,15 +169,21 @@ impl SpecialColor {
 /// Gray-scale colors.
 pub mod luma {
     use crate::color::{CieBasedColorSpace, DeviceColorSpace, RegularColor, RegularColorSpace};
+    use crate::num::NormalizedF32;
 
     /// A luma color.
     #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-    pub struct Color(pub(crate) u8);
+    pub struct Color(pub(crate) NormalizedF32);
 
     impl Color {
         /// Create a new luma color.
         pub fn new(lightness: u8) -> Color {
-            Color(lightness)
+            Self::from_normalized(NormalizedF32::new(f32::from(lightness) / 255.0).unwrap_or(NormalizedF32::ZERO))
+        }
+
+        /// Create a luma color without quantising fractional values to bytes.
+        pub fn from_normalized(lightness: NormalizedF32) -> Self {
+            Self(lightness)
         }
 
         /// Create a black luma color.
@@ -191,7 +197,7 @@ pub mod luma {
         }
 
         pub(crate) fn to_pdf_color(self) -> f32 {
-            self.0 as f32 / 255.0
+            self.0.get()
         }
     }
 
@@ -214,11 +220,7 @@ pub mod luma {
     }
 
     pub(crate) fn color_space(no_device_cs: bool) -> RegularColorSpace {
-        if no_device_cs {
-            CieBasedColorSpace::Luma.into()
-        } else {
-            DeviceColorSpace::Gray.into()
-        }
+        if no_device_cs { CieBasedColorSpace::Luma.into() } else { DeviceColorSpace::Gray.into() }
     }
 }
 
@@ -236,10 +238,10 @@ impl From<SpecialColor> for Color {
 
 /// CMYK colors.
 pub mod cmyk {
+    use crate::SerializeSettings;
     use crate::color::{CieBasedColorSpace, DeviceColorSpace, RegularColorSpace};
     use crate::graphics::icc::ICCBasedColorSpace;
     use crate::num::NormalizedF32;
-    use crate::SerializeSettings;
 
     /// A CMYK color, retaining the precision of PDF ink values.
     #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
@@ -248,9 +250,7 @@ pub mod cmyk {
     impl Color {
         /// Create a new CMYK color from eight-bit components.
         pub fn new(cyan: u8, magenta: u8, yellow: u8, black: u8) -> Color {
-            Self([cyan, magenta, yellow, black].map(|v| {
-                NormalizedF32::new(f32::from(v) / 255.0).unwrap_or(NormalizedF32::ZERO)
-            }))
+            Self([cyan, magenta, yellow, black].map(|v| NormalizedF32::new(f32::from(v) / 255.0).unwrap_or(NormalizedF32::ZERO)))
         }
 
         /// Create a CMYK color without quantising fractional ink amounts to bytes.
@@ -283,9 +283,7 @@ pub mod cmyk {
 
     pub(crate) fn color_space(ss: &SerializeSettings) -> Option<RegularColorSpace> {
         if ss.no_device_cs {
-            ss.clone()
-                .cmyk_profile
-                .map(|p| CieBasedColorSpace::Cmyk(ICCBasedColorSpace::<4>(p.clone())).into())
+            ss.clone().cmyk_profile.map(|p| CieBasedColorSpace::Cmyk(ICCBasedColorSpace::<4>(p.clone())).into())
         } else {
             Some(DeviceColorSpace::Cmyk.into())
         }
@@ -295,10 +293,11 @@ pub mod cmyk {
 /// RGB colors.
 pub mod rgb {
     use crate::color::{CieBasedColorSpace, DeviceColorSpace, RegularColorSpace};
+    use crate::num::NormalizedF32;
 
     /// An RGB color.
     #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-    pub struct Color(pub(crate) u8, pub(crate) u8, pub(crate) u8);
+    pub struct Color([NormalizedF32; 3]);
 
     impl Default for Color {
         fn default() -> Self {
@@ -309,12 +308,17 @@ pub mod rgb {
     impl Color {
         /// Create a new RGB color.
         pub fn new(red: u8, green: u8, blue: u8) -> Self {
-            Color(red, green, blue)
+            Self::from_normalized([red, green, blue].map(|v| NormalizedF32::new(f32::from(v) / 255.0).unwrap_or(NormalizedF32::ZERO)))
+        }
+
+        /// Create an RGB color without quantising fractional values to bytes.
+        pub fn from_normalized(components: [NormalizedF32; 3]) -> Self {
+            Self(components)
         }
 
         /// Create a new linear RGB color.
         pub fn new_linear(red: u8, green: u8, blue: u8) -> Self {
-            Color(red, green, blue)
+            Self::new(red, green, blue)
         }
 
         /// Create a black RGB color.
@@ -329,25 +333,21 @@ pub mod rgb {
 
         /// The `red` component of the color.
         pub fn red(&self) -> u8 {
-            self.0
+            (self.0[0].get() * 255.0).round() as u8
         }
 
         /// The `green` component of the color.
         pub fn green(&self) -> u8 {
-            self.1
+            (self.0[1].get() * 255.0).round() as u8
         }
 
         /// The `blue` component of the color.
         pub fn blue(&self) -> u8 {
-            self.2
+            (self.0[2].get() * 255.0).round() as u8
         }
 
         pub(crate) fn to_pdf_color(self) -> [f32; 3] {
-            [
-                self.0 as f32 / 255.0,
-                self.1 as f32 / 255.0,
-                self.2 as f32 / 255.0,
-            ]
+            self.0.map(NormalizedF32::get)
         }
 
         pub(super) fn color_space(&self, no_device_cs: bool) -> RegularColorSpace {
@@ -368,11 +368,7 @@ pub mod rgb {
     }
 
     pub(crate) fn color_space(no_device_cs: bool) -> RegularColorSpace {
-        if no_device_cs {
-            CieBasedColorSpace::Srgb.into()
-        } else {
-            DeviceColorSpace::Rgb.into()
-        }
+        if no_device_cs { CieBasedColorSpace::Srgb.into() } else { DeviceColorSpace::Rgb.into() }
     }
 }
 
@@ -457,10 +453,7 @@ pub mod separation {
 
     impl Default for SeparationSpace {
         fn default() -> Self {
-            Self {
-                colorant: SeparationColorant::default(),
-                fallback: super::rgb::Color::default().into(),
-            }
+            Self { colorant: SeparationColorant::default(), fallback: super::rgb::Color::default().into() }
         }
     }
 

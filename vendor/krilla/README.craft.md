@@ -26,3 +26,12 @@ The shared writer's native subprocess regression covers the previously aborting
 cleanup and a successful fresh export afterward. Native and WASM export tests
 cover the unchanged successful path. WASM aborts, aborting panic configurations
 and process-wide allocation failures remain outside unwind recovery.
+
+## Fractional colour components
+
+17 October 2026: RGB and grey now retain normalized floating-point components,
+matching the existing fractional CMYK/Separation support. `from_normalized`
+constructors avoid byte quantization; the existing byte constructors and RGB
+byte accessors remain compatible. Grey-to-RGB foreground conversion also keeps
+fractional precision. The shared writer tests inspect the emitted `rg` and `g`
+operators, rather than testing only the in-memory representation.

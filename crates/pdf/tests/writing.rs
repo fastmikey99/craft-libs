@@ -378,3 +378,35 @@ fn precise_zero_length_round_stroke_is_not_discarded() {
     assert!(text.contains("12 9 m\n12 9 l"), "{text}");
     assert!(text.contains(" S") || text.contains("\nS"), "{text}");
 }
+
+#[test]
+fn fractional_rgb_and_gray_are_written_without_byte_quantization() {
+    use backend::{
+        color::{luma, rgb},
+        num::NormalizedF32,
+    };
+    let normalized = |v| NormalizedF32::new(v).unwrap();
+    let rgb = rgb::Color::from_normalized([0.12345, 0.5, 0.98765].map(normalized));
+    assert_ne!(rgb, rgb::Color::new(31, 128, 252));
+    assert_eq!([rgb.red(), rgb.green(), rgb.blue()], [31, 128, 252]);
+    assert_eq!(rgb::Color::new(31, 128, 252), rgb::Color::new_linear(31, 128, 252));
+    let gray = luma::Color::from_normalized(normalized(0.12345));
+    assert_ne!(gray, luma::Color::new(31));
+    let settings = backend::SerializeSettings { compress_content_streams: false, ..Default::default() };
+    let mut writer = Writer::new(settings, Metadata::default());
+    let mut page = writer.document_mut().start_page_with(PageSettings::from_wh(80.0, 40.0).unwrap());
+    let mut surface = page.surface();
+    let mut path = PathBuilder::new();
+    path.push_rect(Rect::from_xywh(2.0, 3.0, 15.0, 12.0).unwrap());
+    let path = path.finish().unwrap();
+    surface.set_fill(Some(Fill { paint: rgb.into(), ..Default::default() }));
+    surface.draw_path(&path);
+    surface.set_fill(Some(Fill { paint: gray.into(), ..Default::default() }));
+    surface.draw_path(&path);
+    surface.finish();
+    page.finish();
+    let bytes = writer.finish().unwrap();
+    let text = String::from_utf8_lossy(&bytes);
+    assert!(text.contains("0.12345 0.5 0.98765 rg"), "{text}");
+    assert!(text.contains("0.12345 g"), "{text}");
+}
