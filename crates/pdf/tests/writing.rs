@@ -317,3 +317,16 @@ fn empty_language_is_absent_and_keeps_required_language_validation() {
     }
     assert_eq!(outputs[0], outputs[1], "empty language and absent language must serialize identically");
 }
+
+#[test]
+fn fractional_print_inks_are_not_quantized_to_byte_values() {
+    use craft_pdf::write::backend::{
+        color::{cmyk, separation},
+        num::NormalizedF32,
+    };
+    let values = [0.12345, 0.5, 0.98765, 0.0001];
+    let ink = cmyk::Color::from_normalized(values.map(|v| NormalizedF32::new(v).unwrap()));
+    assert_ne!(ink, cmyk::Color::new(31, 128, 252, 0));
+    let spot = separation::Color::from_normalized(NormalizedF32::new(0.12345).unwrap(), Default::default());
+    assert_ne!(spot, separation::Color::new(31, Default::default()));
+}

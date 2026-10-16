@@ -238,25 +238,28 @@ impl From<SpecialColor> for Color {
 pub mod cmyk {
     use crate::color::{CieBasedColorSpace, DeviceColorSpace, RegularColorSpace};
     use crate::graphics::icc::ICCBasedColorSpace;
+    use crate::num::NormalizedF32;
     use crate::SerializeSettings;
 
-    /// A CMYK color.
+    /// A CMYK color, retaining the precision of PDF ink values.
     #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-    pub struct Color(pub(crate) u8, pub(crate) u8, pub(crate) u8, pub(crate) u8);
+    pub struct Color([NormalizedF32; 4]);
 
     impl Color {
-        /// Create a new CMYK color.
+        /// Create a new CMYK color from eight-bit components.
         pub fn new(cyan: u8, magenta: u8, yellow: u8, black: u8) -> Color {
-            Color(cyan, magenta, yellow, black)
+            Self([cyan, magenta, yellow, black].map(|v| {
+                NormalizedF32::new(f32::from(v) / 255.0).unwrap_or(NormalizedF32::ZERO)
+            }))
+        }
+
+        /// Create a CMYK color without quantising fractional ink amounts to bytes.
+        pub fn from_normalized(components: [NormalizedF32; 4]) -> Self {
+            Self(components)
         }
 
         pub(crate) fn to_pdf_color(self) -> [f32; 4] {
-            [
-                self.0 as f32 / 255.0,
-                self.1 as f32 / 255.0,
-                self.2 as f32 / 255.0,
-                self.3 as f32 / 255.0,
-            ]
+            self.0.map(NormalizedF32::get)
         }
     }
 
@@ -376,22 +379,28 @@ pub mod rgb {
 /// Separation (spot) colors.
 pub mod separation {
     use crate::color::RegularColor;
+    use crate::num::NormalizedF32;
 
     /// A spot color.
     #[derive(Debug, Hash, Eq, PartialEq, Clone)]
     pub struct Color {
-        pub(crate) tint: u8,
+        pub(crate) tint: NormalizedF32,
         pub(crate) space: SeparationSpace,
     }
 
     impl Color {
         /// Create a new spot color.
         pub fn new(tint: u8, space: SeparationSpace) -> Self {
+            Self::from_normalized(NormalizedF32::new(f32::from(tint) / 255.0).unwrap_or(NormalizedF32::ZERO), space)
+        }
+
+        /// Create a spot color without quantising fractional ink coverage.
+        pub fn from_normalized(tint: NormalizedF32, space: SeparationSpace) -> Self {
             Self { tint, space }
         }
 
         pub(crate) fn to_pdf_color(&self) -> f32 {
-            self.tint as f32 / 255.0
+            self.tint.get()
         }
 
         pub(crate) fn color_space(&self) -> SeparationSpace {
