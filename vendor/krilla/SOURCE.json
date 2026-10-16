@@ -122,7 +122,7 @@
     {
       "path": "src/content.rs",
       "upstream_sha256": "9e59b2c77b73b36caedacfe80894d1cce7fd6fe6f7438ea24fda2019391a980c",
-      "sha256": "9e59b2c77b73b36caedacfe80894d1cce7fd6fe6f7438ea24fda2019391a980c"
+      "sha256": "fa9089bc6f620aea424eee04db2feb790382746d1e61f0375766c9dc37404209"
     },
     {
       "path": "src/data.rs",
@@ -142,7 +142,7 @@
     {
       "path": "src/geom.rs",
       "upstream_sha256": "36078aec49332870797e6a929f977a82fc6bea937627d0598c35dd6e98ece41e",
-      "sha256": "36078aec49332870797e6a929f977a82fc6bea937627d0598c35dd6e98ece41e"
+      "sha256": "d510b770cb90c5854e1f4c2743e5da1ca5a6339ad08bd0be40bea7abe6b0dafe"
     },
     {
       "path": "src/graphics/blend.rs",
@@ -172,7 +172,7 @@
     {
       "path": "src/graphics/image.rs",
       "upstream_sha256": "61324d6426ac79aa5322d0d33a95532934cd1e41797a9dad6302210a2b799d5d",
-      "sha256": "61324d6426ac79aa5322d0d33a95532934cd1e41797a9dad6302210a2b799d5d"
+      "sha256": "5bcb53079be59bfbb381d5c8bfe93e7cd19ba409ba97d6a628c188814312f494"
     },
     {
       "path": "src/graphics/mask.rs",
@@ -292,7 +292,7 @@
     {
       "path": "src/page.rs",
       "upstream_sha256": "ef85a771013896b185c9393414175ee91e5541c9a3fad4760c161764088ac177",
-      "sha256": "9684b5e0256c212be77b992687cb3774030f8e7c0c49a26ad520f5c81a1b8532"
+      "sha256": "5772b864a5bdb04881b10aad4839ec72bdc3fad1bf7b085c2942b774abf89607"
     },
     {
       "path": "src/pdf.rs",
@@ -317,7 +317,7 @@
     {
       "path": "src/surface.rs",
       "upstream_sha256": "94de0a0384fc69c9785c6595b3f2c7ed8319635c901b8dc12894e252ab3ef8da",
-      "sha256": "936dfeb978add9d4443658c209f2d72034583a7771179587d8135ab870ded905"
+      "sha256": "397d7488812e19b5a988619be9d7b17872591c42c3a6b35028a8f7000ac00a7f"
     },
     {
       "path": "src/text/cid.rs",
@@ -337,7 +337,7 @@
     {
       "path": "src/text/glyph/colr.rs",
       "upstream_sha256": "cde9bb33f7b87fe026aa9abe24dc375d8fbdce01a5d9aa6764f93fe6febef676",
-      "sha256": "cde9bb33f7b87fe026aa9abe24dc375d8fbdce01a5d9aa6764f93fe6febef676"
+      "sha256": "47eca3c685950d51f242d70519b23afab159a5dd51d1cfc6af52e5800ad6b90d"
     },
     {
       "path": "src/text/glyph/mod.rs",
@@ -347,7 +347,7 @@
     {
       "path": "src/text/glyph/outline.rs",
       "upstream_sha256": "0739d195e81d1af69fd9be1a43cf39aea4cd84b1378c3d01f2bd9f9ace05d813",
-      "sha256": "0739d195e81d1af69fd9be1a43cf39aea4cd84b1378c3d01f2bd9f9ace05d813"
+      "sha256": "1e9c6f0eb980cb11fd386f7c835cbb4408486d1a54db2a8e07124ad6938a9ec6"
     },
     {
       "path": "src/text/glyph/svg.rs",
@@ -372,7 +372,7 @@
     {
       "path": "src/text/type3.rs",
       "upstream_sha256": "7ac9b8529369a55fa8e9eb2163909bac36212b057eec72710ea8b7a2455e9bd7",
-      "sha256": "7ac9b8529369a55fa8e9eb2163909bac36212b057eec72710ea8b7a2455e9bd7"
+      "sha256": "c22d62352b59c283e999bdedbf3f4833010e9948703aff8ac7e5c9e3598cdd47"
     },
     {
       "path": "src/util.rs",
