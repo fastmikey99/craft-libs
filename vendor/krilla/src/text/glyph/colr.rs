@@ -76,7 +76,7 @@ fn interpret(instructions: Vec<Instruction>, surface: &mut Surface) {
 
                 let num_clips = clips.len();
                 for path in clips {
-                    surface.push_clip_path(&crate::geom::Path(path), &FillRule::NonZero);
+                    surface.push_clip_path(&crate::geom::Path(path, None), &FillRule::NonZero);
                 }
 
                 let old_fill = surface.get_fill().cloned();
@@ -85,7 +85,7 @@ fn interpret(instructions: Vec<Instruction>, surface: &mut Surface) {
                 surface.set_fill(Some(*fill));
                 surface.set_stroke(None);
 
-                surface.draw_path(&crate::geom::Path(filled[0].clone()));
+                surface.draw_path(&crate::geom::Path(filled[0].clone(), None));
 
                 surface.set_fill(old_fill);
                 surface.set_stroke(old_stroke);

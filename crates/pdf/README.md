@@ -215,3 +215,18 @@ only: existing nonsymbolic glyph selection can still choose StandardEncoding gly
 or `.notdef`. Tests pin that distinction and the upstream WinAnsi unused-code bullet
 mapping; fallback text is not proof of the original author's text. Without fixtures those reader
 contracts are also compiled and explicitly ignored; provisioned CI executes them.
+
+### Editable separation geometry (fork experiment, 16 October 2026)
+
+`InterpreterSettings::preserve_path_geometry` lets editable import retain repeated
+vertices without the raster interpreter's 0.0001-point displacement. The default
+raster behaviour stays unchanged. The writer accepts `Path::from_commands64`,
+`Transform::from_row64` and `Size::from_wh64`; path operands and painting matrices
+retain double precision (serialized to twelve decimal places). Existing f32
+constructors remain available. Bounds/stroke estimates and several ancillary PDF
+features still use f32; this is not a claim that every PDF structure is lossless.
+Zero-length round-capped strokes are emitted as PDF strokes instead of discarded.
+
+Synthetic reader/writer contracts cover repeated vertices, fractional path and
+clip coordinates, placement matrices, invalid coordinates and round dot strokes.
+No source-PDF pass-through or production profile policy is implemented here.

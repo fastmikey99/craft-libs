@@ -330,3 +330,51 @@ fn fractional_print_inks_are_not_quantized_to_byte_values() {
     let spot = separation::Color::from_normalized(NormalizedF32::new(0.12345).unwrap(), Default::default());
     assert_ne!(spot, separation::Color::new(31, Default::default()));
 }
+
+#[test]
+fn precise_paths_clips_and_transforms_keep_pdf_coordinates() {
+    use backend::geom::{Path, PathCommand64 as C, Transform};
+    let commands = vec![C::Move([12.123456789, 9.987654321]), C::Line([42.135791357, 12.246813579]), C::Line([45.987654321, 39.123456789]), C::Close];
+    let path = Path::from_commands64(commands).unwrap();
+    assert!(Path::from_commands64(vec![C::Line([1.0, 2.0])]).is_none());
+    assert!(Path::from_commands64(vec![C::Move([f64::NAN, 2.0])]).is_none());
+    let transform = Transform::from_row64([1.0, 0.0, 0.0, 1.0, 0.123456789, 0.234567891]);
+    assert_eq!(transform.coefficients64()[4], 0.123456789);
+    let settings = backend::SerializeSettings { compress_content_streams: false, ..Default::default() };
+    let mut writer = Writer::new(settings, Metadata::default());
+    let mut page = writer.document_mut().start_page_with(PageSettings::new(Size::from_wh64(100.0, 80.123456789).unwrap()));
+    let mut surface = page.surface();
+    surface.push_transform(&transform);
+    surface.push_clip_path(&path, &backend::paint::FillRule::NonZero);
+    surface.draw_path(&path);
+    surface.pop();
+    surface.pop();
+    surface.finish();
+    page.finish();
+    let bytes = writer.finish().unwrap();
+    let text = String::from_utf8_lossy(&bytes);
+    assert!(text.contains("12.123456789 9.987654321 m"));
+    // The clip is transformed into page space, and keeps the same precision.
+    assert!(text.contains("12.246913578 69.901234577 m"), "{text}");
+    assert!(text.contains("0.123456789000 79.888888898000 cm"));
+}
+
+#[test]
+fn precise_zero_length_round_stroke_is_not_discarded() {
+    use backend::geom::{Path, PathCommand64 as C};
+    use backend::paint::{LineCap, Stroke};
+    let path = Path::from_commands64(vec![C::Move([12.0, 9.0]), C::Line([12.0, 9.0])]).unwrap();
+    let settings = backend::SerializeSettings { compress_content_streams: false, ..Default::default() };
+    let mut writer = Writer::new(settings, Metadata::default());
+    let mut page = writer.document_mut().start_page_with(PageSettings::from_wh(100.0, 80.0).unwrap());
+    let mut surface = page.surface();
+    surface.set_fill(None);
+    surface.set_stroke(Some(Stroke { width: 2.0, line_cap: LineCap::Round, ..Default::default() }));
+    surface.draw_path(&path);
+    surface.finish();
+    page.finish();
+    let bytes = writer.finish().unwrap();
+    let text = String::from_utf8_lossy(&bytes);
+    assert!(text.contains("12 9 m\n12 9 l"), "{text}");
+    assert!(text.contains(" S") || text.contains("\nS"), "{text}");
+}

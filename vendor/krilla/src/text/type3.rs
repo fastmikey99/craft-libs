@@ -175,7 +175,7 @@ impl Type3Font {
                     if let Some(path) = glyph_path(self.font.clone(), glyph.glyph_id) {
                         surface.set_fill(Some(Fill::default()));
                         surface.set_stroke(None);
-                        surface.draw_path(&Path(path));
+                        surface.draw_path(&Path(path, None));
                     }
                 };
 

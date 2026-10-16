@@ -23,16 +23,35 @@ impl Point {
 
 /// A size.
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub struct Size(tiny_skia_path::Size);
+pub struct Size(tiny_skia_path::Size, f64, f64);
 
 impl Size {
     /// Creates a new `Size` from width and height.
     ///
     /// Returns `None` if either the width or the height is not > 0.
     pub fn from_wh(width: f32, height: f32) -> Option<Self> {
-        Some(Self(tiny_skia_path::Size::from_wh(width, height)?))
+        Self::from_wh64(f64::from(width), f64::from(height))
     }
 
+    /// Create a size retaining exact PDF dimensions.
+    pub fn from_wh64(width: f64, height: f64) -> Option<Self> {
+        if !width.is_finite() || !height.is_finite() {
+            return None;
+        }
+        Some(Self(
+            tiny_skia_path::Size::from_wh(width as f32, height as f32)?,
+            width,
+            height,
+        ))
+    }
+    /// Original height, without reduction to renderer precision.
+    pub fn height64(&self) -> f64 {
+        self.2
+    }
+    /// Original width, without reduction to renderer precision.
+    pub fn width64(&self) -> f64 {
+        self.1
+    }
     /// Returns the width of the size.
     pub fn width(&self) -> f32 {
         self.0.width()
@@ -173,125 +192,150 @@ impl From<Rect> for Quadrilateral {
 /// Meaning Transform(0, 0, 0, 0, 0, 0) is ok, while it's technically not.
 /// Non-finite values are also not an error.
 #[allow(missing_docs)]
-#[derive(Copy, Clone, PartialEq, Debug, Default)]
-pub struct Transform(tiny_skia_path::Transform);
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct Transform([f64; 6]);
 
-impl Transform {
-    /// Creates an identity transform.
-    pub fn identity() -> Self {
-        Self(tiny_skia_path::Transform::default())
-    }
-
-    /// Creates a new `Transform`.
-    pub fn from_row(sx: f32, ky: f32, kx: f32, sy: f32, tx: f32, ty: f32) -> Self {
-        Self(tiny_skia_path::Transform::from_row(sx, ky, kx, sy, tx, ty))
-    }
-
-    /// Creates a new translating `Transform`.
-    pub fn from_translate(tx: f32, ty: f32) -> Self {
-        Self(tiny_skia_path::Transform::from_translate(tx, ty))
-    }
-
-    /// Creates a new scaling `Transform`.
-    pub fn from_scale(sx: f32, sy: f32) -> Self {
-        Self(tiny_skia_path::Transform::from_scale(sx, sy))
-    }
-
-    /// Creates a new skewing `Transform`.
-    pub fn from_skew(kx: f32, ky: f32) -> Self {
-        Self(tiny_skia_path::Transform::from_skew(kx, ky))
-    }
-
-    /// Creates a new rotating `Transform`.
-    ///
-    /// `angle` in degrees.
-    pub fn from_rotate(angle: f32) -> Self {
-        Self(tiny_skia_path::Transform::from_rotate(angle))
-    }
-
-    /// Creates a new rotating `Transform` at the specified position.
-    ///
-    /// `angle` in degrees.
-    pub fn from_rotate_at(angle: f32, tx: f32, ty: f32) -> Self {
-        Self(tiny_skia_path::Transform::from_rotate_at(angle, tx, ty))
-    }
-
-    /// Return the `sx` component
-    pub fn sx(&self) -> f32 {
-        self.0.sx
-    }
-
-    /// Return the `sy` component
-    pub fn sy(&self) -> f32 {
-        self.0.sy
-    }
-
-    /// Return the `kx` component
-    pub fn kx(&self) -> f32 {
-        self.0.kx
-    }
-
-    /// Return the `kx` component
-    pub fn ky(&self) -> f32 {
-        self.0.ky
-    }
-
-    /// Return the `tx` component
-    pub fn tx(&self) -> f32 {
-        self.0.tx
-    }
-
-    /// Return the `ty` component
-    pub fn ty(&self) -> f32 {
-        self.0.ty
-    }
-
-    /// Returns the inverted transform.
-    pub fn invert(&self) -> Option<Self> {
-        Some(Self(self.0.invert()?))
-    }
-
-    pub(crate) fn pre_concat(&self, other: Self) -> Self {
-        Self(self.0.pre_concat(other.0))
-    }
-
-    pub(crate) fn post_concat(&self, other: Self) -> Self {
-        Self(self.0.post_concat(other.0))
-    }
-
-    pub(crate) fn to_tsp(self) -> tiny_skia_path::Transform {
-        self.0
-    }
-
-    pub(crate) fn from_tsp(ts: tiny_skia_path::Transform) -> Self {
-        Self(ts)
-    }
-
-    pub(crate) fn to_pdf_transform(self) -> [f32; 6] {
-        [
-            self.0.sx, self.0.ky, self.0.kx, self.0.sy, self.0.tx, self.0.ty,
-        ]
+impl Default for Transform {
+    fn default() -> Self {
+        Self::identity()
     }
 }
 
+impl Transform {
+    /// Identity transform.
+    pub fn identity() -> Self {
+        Self([1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
+    }
+    /// Create from single-precision coefficients (retained for API compatibility).
+    pub fn from_row(sx: f32, ky: f32, kx: f32, sy: f32, tx: f32, ty: f32) -> Self {
+        Self::from_row64([sx, ky, kx, sy, tx, ty].map(f64::from))
+    }
+    /// Create without reducing PDF coordinate precision.
+    pub fn from_row64(coefficients: [f64; 6]) -> Self {
+        Self(coefficients)
+    }
+    /// Double-precision coefficients in PDF matrix order.
+    pub fn coefficients64(self) -> [f64; 6] {
+        self.0
+    }
+    /// Translation.
+    pub fn from_translate(tx: f32, ty: f32) -> Self {
+        Self::from_row(1.0, 0.0, 0.0, 1.0, tx, ty)
+    }
+    /// Scaling.
+    pub fn from_scale(sx: f32, sy: f32) -> Self {
+        Self::from_row(sx, 0.0, 0.0, sy, 0.0, 0.0)
+    }
+    /// Skewing.
+    pub fn from_skew(kx: f32, ky: f32) -> Self {
+        Self::from_tsp(tiny_skia_path::Transform::from_skew(kx, ky))
+    }
+    /// Rotation in degrees.
+    pub fn from_rotate(angle: f32) -> Self {
+        Self::from_tsp(tiny_skia_path::Transform::from_rotate(angle))
+    }
+    /// Rotation at a position.
+    pub fn from_rotate_at(angle: f32, tx: f32, ty: f32) -> Self {
+        Self::from_tsp(tiny_skia_path::Transform::from_rotate_at(angle, tx, ty))
+    }
+    /// The sx component, for renderer APIs.
+    pub fn sx(&self) -> f32 {
+        self.0[0] as f32
+    }
+    /// The ky component, for renderer APIs.
+    pub fn ky(&self) -> f32 {
+        self.0[1] as f32
+    }
+    /// The kx component, for renderer APIs.
+    pub fn kx(&self) -> f32 {
+        self.0[2] as f32
+    }
+    /// The sy component, for renderer APIs.
+    pub fn sy(&self) -> f32 {
+        self.0[3] as f32
+    }
+    /// The tx component, for renderer APIs.
+    pub fn tx(&self) -> f32 {
+        self.0[4] as f32
+    }
+    /// The ty component, for renderer APIs.
+    pub fn ty(&self) -> f32 {
+        self.0[5] as f32
+    }
+    /// Inverse, when finite and nonsingular.
+    pub fn invert(&self) -> Option<Self> {
+        let [a, b, c, d, e, f] = self.0;
+        let det = a * d - b * c;
+        if det == 0.0 || !det.is_finite() {
+            return None;
+        }
+        let inv = [
+            d / det,
+            -b / det,
+            -c / det,
+            a / det,
+            (c * f - d * e) / det,
+            (b * e - a * f) / det,
+        ];
+        inv.iter().all(|v| v.is_finite()).then_some(Self(inv))
+    }
+    pub(crate) fn pre_concat(&self, other: Self) -> Self {
+        let [a, b, c, d, e, f] = self.0;
+        let [g, h, i, j, k, l] = other.0;
+        Self([
+            a * g + c * h,
+            b * g + d * h,
+            a * i + c * j,
+            b * i + d * j,
+            a * k + c * l + e,
+            b * k + d * l + f,
+        ])
+    }
+    pub(crate) fn post_concat(&self, other: Self) -> Self {
+        other.pre_concat(*self)
+    }
+    pub(crate) fn to_tsp(self) -> tiny_skia_path::Transform {
+        tiny_skia_path::Transform::from_row(
+            self.sx(),
+            self.ky(),
+            self.kx(),
+            self.sy(),
+            self.tx(),
+            self.ty(),
+        )
+    }
+    pub(crate) fn from_tsp(ts: tiny_skia_path::Transform) -> Self {
+        Self::from_row(ts.sx, ts.ky, ts.kx, ts.sy, ts.tx, ts.ty)
+    }
+    pub(crate) fn to_pdf_transform(self) -> [f32; 6] {
+        self.0.map(|v| v as f32)
+    }
+}
+impl Eq for Transform {}
 impl Hash for Transform {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.tx.to_bits().hash(state);
-        self.0.ty.to_bits().hash(state);
-        self.0.sx.to_bits().hash(state);
-        self.0.sy.to_bits().hash(state);
-        self.0.kx.to_bits().hash(state);
-        self.0.ky.to_bits().hash(state);
+        for v in self.0 {
+            (if v == 0.0 { 0.0 } else { v }).to_bits().hash(state);
+        }
     }
 }
 
 /// A path.
-pub struct Path(pub(crate) tiny_skia_path::Path);
+pub struct Path(
+    pub(crate) tiny_skia_path::Path,
+    pub(crate) Option<Vec<PathCommand64>>,
+);
 
 impl Path {
     /// Apply a transformation to the path.
     pub fn transform(self, transform: Transform) -> Option<Self> {
-        Some(Self(self.0.transform(transform.to_tsp())?))
+        let precise = self.1.map(|commands| {
+            commands
+                .into_iter()
+                .map(|c| c.transformed(transform))
+                .collect()
+        });
+        Some(Self(self.0.transform(transform.to_tsp())?, precise))
     }
 }
 
@@ -336,6 +380,67 @@ impl PathBuilder {
 
     /// Finish the current path.
     pub fn finish(self) -> Option<Path> {
-        Some(Path(self.0.finish()?))
+        Some(Path(self.0.finish()?, None))
+    }
+}
+
+/// Double-precision path commands. PDF coordinates need not be reduced to renderer precision.
+#[derive(Clone, Copy, Debug)]
+pub enum PathCommand64 {
+    /// Begin a contour.
+    Move([f64; 2]),
+    /// Add a line.
+    Line([f64; 2]),
+    /// Add a cubic Bezier curve.
+    Cubic([f64; 2], [f64; 2], [f64; 2]),
+    /// Close a contour.
+    Close,
+}
+
+impl PathCommand64 {
+    pub(crate) fn transformed(self, t: Transform) -> Self {
+        let [a, b, c, d, e, f] = t.coefficients64();
+        let p = |p: [f64; 2]| [a * p[0] + c * p[1] + e, b * p[0] + d * p[1] + f];
+        match self {
+            Self::Move(a) => Self::Move(p(a)),
+            Self::Line(a) => Self::Line(p(a)),
+            Self::Cubic(a, b, c) => Self::Cubic(p(a), p(b), p(c)),
+            Self::Close => Self::Close,
+        }
+    }
+}
+
+impl Path {
+    /// Build a path retaining double precision in the PDF. The f32 shadow is used only for
+    /// conservative bounds/stroke calculations. Reject non-finite or extreme coordinates and
+    /// commands before the first move. Quadratic curves should be converted to cubics by callers.
+    pub fn from_commands64(commands: Vec<PathCommand64>) -> Option<Self> {
+        let mut builder = tiny_skia_path::PathBuilder::new();
+        let mut started = false;
+        let valid = |p: [f64; 2]| p.iter().all(|v| v.is_finite() && v.abs() <= 1e9);
+        for command in &commands {
+            match *command {
+                PathCommand64::Move(p) if valid(p) => {
+                    builder.move_to(p[0] as f32, p[1] as f32);
+                    started = true;
+                }
+                PathCommand64::Line(p) if started && valid(p) => {
+                    builder.line_to(p[0] as f32, p[1] as f32)
+                }
+                PathCommand64::Cubic(a, b, c) if started && valid(a) && valid(b) && valid(c) => {
+                    builder.cubic_to(
+                        a[0] as f32,
+                        a[1] as f32,
+                        b[0] as f32,
+                        b[1] as f32,
+                        c[0] as f32,
+                        c[1] as f32,
+                    )
+                }
+                PathCommand64::Close if started => builder.close(),
+                _ => return None,
+            }
+        }
+        Some(Self(builder.finish()?, Some(commands)))
     }
 }

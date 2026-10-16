@@ -29,7 +29,7 @@ pub(crate) fn draw_glyph(
     base_transform: Transform,
     surface: &mut Surface,
 ) -> Option<()> {
-    let path = Path(glyph_path(font, glyph).and_then(|p| p.transform(base_transform.to_tsp()))?);
+    let path = Path(glyph_path(font, glyph).and_then(|p| p.transform(base_transform.to_tsp()))?, None);
 
     surface.draw_path(&path);
 
