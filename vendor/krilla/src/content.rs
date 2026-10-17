@@ -195,6 +195,7 @@ impl ContentBuilder {
     pub(crate) fn draw_path(
         &mut self,
         path: &Path,
+        precise: Option<&[crate::geom::PathCommand64]>,
         mut fill: Option<&Fill>,
         stroke: Option<&Stroke>,
         sc: &mut SerializeContext,
@@ -205,7 +206,7 @@ impl ContentBuilder {
         }
 
         // Zero-size geometry, don't draw.
-        if path.bounds().width() == 0.0 && path.bounds().height() == 0.0 {
+        if stroke.is_none() && path.bounds().width() == 0.0 && path.bounds().height() == 0.0 {
             return;
         }
 
@@ -231,6 +232,19 @@ impl ContentBuilder {
         let calculate_bbox = |is_solid: bool| bbox_important || !is_solid;
 
         let stroke_bbox = |stroke: &Stroke| {
+            // A zero-length round-capped stroke paints a dot. Keep its PDF geometry
+            // unchanged and give its form a non-empty bounding box.
+            if path.bounds().width() == 0.0 && path.bounds().height() == 0.0 && stroke.width > 0.0 {
+                let r = stroke.width * 0.5;
+                if let Some(bounds) = Rect::from_xywh(
+                    path.bounds().left() - r,
+                    path.bounds().top() - r,
+                    2.0 * r,
+                    2.0 * r,
+                ) {
+                    return bounds;
+                }
+            }
             if calculate_bbox(matches!(&stroke.paint.0, InnerPaint::Color(_))) {
                 calculate_stroke_bbox(stroke, path).unwrap_or(Rect::from_tsp(path.bounds()))
             } else {
@@ -272,7 +286,7 @@ impl ContentBuilder {
                 sc,
                 chunk_container,
             );
-            sb.content_draw_path(path.segments());
+            sb.content_draw_precise_or_path(path, precise);
 
             match fill_rule {
                 FillRule::NonZero => sb.content.fill_nonzero(),
@@ -286,7 +300,7 @@ impl ContentBuilder {
                          stroke: &Stroke,
                          stroke_bbox: Rect| {
             sb.content_set_stroke_properties(stroke_bbox, stroke, sc, chunk_container);
-            sb.content_draw_path(path.segments());
+            sb.content_draw_precise_or_path(path, precise);
             sb.content.stroke();
         };
 
@@ -304,7 +318,7 @@ impl ContentBuilder {
                 chunk_container,
             );
             sb.content_set_stroke_properties(stroke_bbox, stroke, sc, chunk_container);
-            sb.content_draw_path(path.segments());
+            sb.content_draw_precise_or_path(path, precise);
 
             match fill_rule {
                 FillRule::NonZero => sb.content.fill_nonzero_and_stroke(),
@@ -358,15 +372,29 @@ impl ContentBuilder {
         }
     }
 
-    pub(crate) fn push_clip_path(&mut self, path: &Path, clip_rule: &FillRule) {
+    pub(crate) fn push_clip_path(
+        &mut self,
+        path: &Path,
+        precise: Option<&[crate::geom::PathCommand64]>,
+        clip_rule: &FillRule,
+    ) {
         self.content_save_state();
-        self.content_draw_path(
-            path.clone()
-                .transform(self.cur_transform_with_root_transform().to_tsp())
-                .unwrap()
-                .segments(),
-        );
-
+        if let Some(commands) = precise {
+            self.content_draw_commands64(
+                commands
+                    .iter()
+                    .map(|c| c.transformed(self.cur_transform_with_root_transform()))
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            );
+        } else {
+            self.content_draw_path(
+                path.clone()
+                    .transform(self.cur_transform_with_root_transform().to_tsp())
+                    .unwrap()
+                    .segments(),
+            );
+        }
         match clip_rule {
             FillRule::NonZero => self.content.clip_nonzero(),
             FillRule::EvenOdd => self.content.clip_even_odd(),
@@ -1013,7 +1041,17 @@ impl ContentBuilder {
         let transform = self.cur_transform_with_root_transform();
 
         if transform != Transform::identity() {
-            self.content.transform(transform.to_pdf_transform());
+            let [a, b, c, d, e, f] = transform.coefficients64();
+            let number = |v: f64| format!("{v:.12}");
+            self.content.op(&format!(
+                "{} {} {} {} {} {} cm",
+                number(a),
+                number(b),
+                number(c),
+                number(d),
+                number(e),
+                number(f)
+            ));
         }
 
         let state = self.graphics_states.cur().ext_g_state().clone();
@@ -1269,6 +1307,50 @@ impl ContentBuilder {
         if let Some(stroke_dash) = &stroke.dash {
             self.content
                 .set_dash_pattern(stroke_dash.array.iter().copied(), stroke_dash.offset);
+        }
+    }
+
+    fn content_draw_precise_or_path(
+        &mut self,
+        path: &Path,
+        precise: Option<&[crate::geom::PathCommand64]>,
+    ) {
+        if let Some(commands) = precise {
+            self.content_draw_commands64(commands);
+        } else {
+            self.content_draw_path(path.segments());
+        }
+    }
+
+    fn content_draw_commands64(&mut self, commands: &[crate::geom::PathCommand64]) {
+        use crate::geom::PathCommand64;
+        // Arbitrary operations are a public pdf-writer API. All text here is generated from
+        // finite, bounded coordinates; fixed decimal notation avoids illegal PDF exponents.
+        let n = |v: f64| {
+            let s = format!("{v:.12}");
+            let s = s.trim_end_matches('0').trim_end_matches('.');
+            if s == "-0" {
+                "0".to_string()
+            } else {
+                s.to_string()
+            }
+        };
+        for command in commands {
+            let op = match *command {
+                PathCommand64::Move(p) => format!("{} {} m", n(p[0]), n(p[1])),
+                PathCommand64::Line(p) => format!("{} {} l", n(p[0]), n(p[1])),
+                PathCommand64::Cubic(a, b, c) => format!(
+                    "{} {} {} {} {} {} c",
+                    n(a[0]),
+                    n(a[1]),
+                    n(b[0]),
+                    n(b[1]),
+                    n(c[0]),
+                    n(c[1])
+                ),
+                PathCommand64::Close => "h".into(),
+            };
+            self.content.op(&op);
         }
     }
 

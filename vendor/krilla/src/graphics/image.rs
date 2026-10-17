@@ -223,6 +223,28 @@ impl Image {
         })))
     }
 
+    /// Embed an existing PDF CMYK JPEG without decoding its compressed samples.
+    /// `invert` is the PDF Decode polarity, not the standalone JPEG convention.
+    /// Embedded JPEG ICC metadata is ignored: this is an untagged DeviceCMYK image.
+    pub fn from_pdf_cmyk_jpeg(data: Data, interpolate: bool, invert: bool) -> Result<Image, String> {
+        let mut metadata = jpeg_metadata(data.as_ref())?;
+        if metadata.color_space != ImageColorspace::Cmyk {
+            return Err("PDF CMYK JPEG must have four components".into());
+        }
+        metadata.icc = None;
+        let hash = (data.sip_hash(), invert, "pdf-cmyk").sip_hash();
+        Ok(Self(Arc::new(ImageRepr {
+            inner: Deferred::new(move || Ok(Repr::Jpeg(JpegRepr {
+                data,
+                bits_per_component: BitsPerComponent::Eight,
+                invert_cmyk: invert,
+            }))),
+            metadata,
+            sip: hash,
+            interpolate,
+        })))
+    }
+
     /// Create a new bitmap image from a `.jpg` file with custom ICC profile.
     #[doc(hidden)]
     pub fn from_jpeg_with_icc(

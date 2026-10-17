@@ -137,6 +137,7 @@ impl<'a> Surface<'a> {
             if self.has_complex_fill_or_stroke() {
                 self.bd.get_mut().draw_path(
                     &path.0,
+                    path.1.as_deref(),
                     self.fill.as_ref(),
                     None,
                     self.sc,
@@ -144,6 +145,7 @@ impl<'a> Surface<'a> {
                 );
                 self.bd.get_mut().draw_path(
                     &path.0,
+                    path.1.as_deref(),
                     None,
                     self.stroke.as_ref(),
                     self.sc,
@@ -152,6 +154,7 @@ impl<'a> Surface<'a> {
             } else {
                 self.bd.get_mut().draw_path(
                     &path.0,
+                    path.1.as_deref(),
                     self.fill.as_ref(),
                     self.stroke.as_ref(),
                     self.sc,
@@ -162,6 +165,7 @@ impl<'a> Surface<'a> {
             // Draw with black by default.
             self.bd.get_mut().draw_path(
                 &path.0,
+                path.1.as_deref(),
                 Some(&Fill::default()),
                 None,
                 self.sc,
@@ -425,7 +429,9 @@ impl<'a> Surface<'a> {
     /// Push a new clip path.
     pub fn push_clip_path(&mut self, path: &Path, clip_rule: &FillRule) {
         self.push_instructions.push(PushInstruction::ClipPath);
-        self.bd.get_mut().push_clip_path(&path.0, clip_rule);
+        self.bd
+            .get_mut()
+            .push_clip_path(&path.0, path.1.as_deref(), clip_rule);
     }
 
     /// Push a new mask.
