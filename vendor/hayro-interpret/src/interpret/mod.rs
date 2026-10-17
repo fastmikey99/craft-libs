@@ -48,6 +48,9 @@ pub type WarningSinkFn = Arc<dyn Fn(InterpreterWarning) + Send + Sync>;
 #[derive(Clone)]
 /// Settings that should be applied during the interpretation process.
 pub struct InterpreterSettings {
+    /// Retain zero-length line coordinates for editable/vector imports. Raster callers may
+    /// keep the legacy tiny displacement that makes round-capped dot strokes visible.
+    pub preserve_path_geometry: bool,
     /// Nearly every PDF contains text. In most cases, PDF files embed the fonts they use, and
     /// hayro can therefore read the font files and do all the processing needed. However, there
     /// are two problems:
@@ -136,6 +139,7 @@ impl Default for InterpreterSettings {
             cmap_resolver: Arc::new(hayro_cmap::load_embedded),
             #[cfg(not(feature = "embed-cmaps"))]
             cmap_resolver: Arc::new(|_| None),
+            preserve_path_geometry: false,
             warning_sink: Arc::new(|_| {}),
             render_annotations: true,
             hide_comments: false,
@@ -445,7 +449,7 @@ fn interpret_window<'a>(
                     let last_point = *context.last_point();
                     let mut p = Point::new(m.0.as_f64(), m.1.as_f64());
                     *(context.last_point_mut()) = p;
-                    if last_point == p {
+                    if last_point == p && !context.settings.preserve_path_geometry {
                         // Add a small delta so that zero width lines can still have a round stroke.
                         p.x += 0.0001;
                     }

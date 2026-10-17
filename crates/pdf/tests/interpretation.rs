@@ -13,14 +13,16 @@ mod device {
     struct PathDevice {
         paths: usize,
         fail: bool,
+        path: Vec<kurbo::PathEl>,
     }
 
     impl Device<'_> for PathDevice {
         fn set_soft_mask(&mut self, _: Option<SoftMask<'_>>) {}
         fn set_blend_mode(&mut self, _: BlendMode) {}
-        fn draw_path(&mut self, _: &BezPath, _: Affine, _: &Paint<'_>, _: &PathDrawMode) {
+        fn draw_path(&mut self, path: &BezPath, _: Affine, _: &Paint<'_>, _: &PathDrawMode) {
             assert!(!self.fail, "synthetic device failure");
             self.paths += 1;
+            self.path = path.elements().to_vec();
         }
         fn push_clip_path(&mut self, _: &ClipPath) {}
         fn push_transparency_group(&mut self, _: f32, _: Option<SoftMask<'_>>, _: BlendMode) {}
@@ -31,7 +33,10 @@ mod device {
     }
 
     fn execute(device: &mut PathDevice) -> Result<(), craft_pdf::ExecutionError> {
-        let content = "1 0 0 rg 0 0 40 20 re f";
+        execute_with(device, "1 0 0 rg 0 0 40 20 re f", InterpreterSettings::default())
+    }
+
+    fn execute_with(device: &mut PathDevice, content: &str, settings: InterpreterSettings) -> Result<(), craft_pdf::ExecutionError> {
         let bytes = format!(
             "%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 40 20] /Contents 4 0 R >> endobj\n4 0 obj << /Length {} >> stream\n{content}\nendstream endobj\ntrailer << /Root 1 0 R >>\n%%EOF",
             content.len()
@@ -39,14 +44,18 @@ mod device {
         let pdf = craft_pdf::open_slice(bytes.as_bytes(), None).unwrap();
         let page = &pdf.pages()[0];
         let cache = InterpreterCache::new();
-        let mut context = Context::new(
-            page.initial_transform(true).to_kurbo(),
-            Rect::new(0.0, 0.0, 40.0, 20.0),
-            &cache,
-            page.xref(),
-            InterpreterSettings::default(),
-        );
+        let mut context = Context::new(page.initial_transform(true).to_kurbo(), Rect::new(0.0, 0.0, 40.0, 20.0), &cache, page.xref(), settings);
         craft_pdf::interpret_page(page, &mut context, device)
+    }
+
+    #[test]
+    fn editable_geometry_does_not_nudge_repeated_vertices() {
+        let content = "0 g 12 9 m 12 9 l 20 30 35 40 42 15 c h f";
+        let mut device = PathDevice::default();
+        execute_with(&mut device, content, InterpreterSettings { preserve_path_geometry: true, ..Default::default() }).unwrap();
+        assert_eq!(device.path[1], kurbo::PathEl::LineTo(kurbo::Point::new(12.0, 9.0)));
+        execute_with(&mut device, content, InterpreterSettings::default()).unwrap();
+        assert_eq!(device.path[1], kurbo::PathEl::LineTo(kurbo::Point::new(12.0001, 9.0)));
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]

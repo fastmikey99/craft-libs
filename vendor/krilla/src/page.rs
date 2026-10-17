@@ -216,7 +216,7 @@ impl<'a> Page<'a> {
     }
 
     pub(crate) fn root_transform(&self) -> Transform {
-        page_root_transform(self.page_settings.surface_size().height())
+        page_root_transform(self.page_settings.surface_size().height64())
     }
 
     /// Add an annotation to the page.
@@ -271,8 +271,9 @@ impl<'a> Page<'a> {
     pub fn finish(self) {}
 }
 
-pub(crate) fn page_root_transform(height: f32) -> Transform {
-    Transform::from_row(1.0, 0.0, 0.0, -1.0, 0.0, height)
+pub(crate) fn page_root_transform(height: impl Into<f64>) -> Transform {
+    let height = height.into();
+    Transform::from_row64([1.0, 0.0, 0.0, -1.0, 0.0, height])
 }
 
 impl Drop for Page<'_> {
@@ -422,7 +423,7 @@ impl InternalPage {
 
         let transform_rect = |rect: Rect| {
             rect.transform(page_root_transform(
-                self.page_settings.surface_size().height(),
+                self.page_settings.surface_size().height64(),
             ))
             .unwrap()
         };
