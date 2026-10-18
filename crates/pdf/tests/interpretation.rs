@@ -7,13 +7,17 @@ mod device {
         BlendMode, ClipPath, Context, Device, GlyphDrawMode, Image, InterpreterCache, InterpreterSettings, Paint, PathDrawMode, SoftMask,
         TransformExt, font::Glyph,
     };
-    use kurbo::{Affine, BezPath, Rect};
+    use kurbo::{Affine, BezPath, Rect, Shape};
 
     #[derive(Default)]
     struct PathDevice {
         paths: usize,
         fail: bool,
         path: Vec<kurbo::PathEl>,
+        clip_paths: Vec<Rect>,
+        clip_pops: usize,
+        clip_depth: usize,
+        paint_depths: Vec<usize>,
     }
 
     impl Device<'_> for PathDevice {
@@ -23,12 +27,20 @@ mod device {
             assert!(!self.fail, "synthetic device failure");
             self.paths += 1;
             self.path = path.elements().to_vec();
+            self.paint_depths.push(self.clip_depth);
         }
-        fn push_clip_path(&mut self, _: &ClipPath) {}
+        fn push_clip_path(&mut self, clip: &ClipPath) {
+            self.clip_paths.push(clip.path.bounding_box());
+            self.clip_depth += 1;
+        }
         fn push_transparency_group(&mut self, _: f32, _: Option<SoftMask<'_>>, _: BlendMode) {}
         fn draw_glyph(&mut self, _: &Glyph<'_>, _: Affine, _: Affine, _: &Paint<'_>, _: &GlyphDrawMode) {}
         fn draw_image(&mut self, _: Image<'_, '_>, _: Affine) {}
-        fn pop_clip_path(&mut self) {}
+        fn pop_clip_path(&mut self) {
+            assert!(self.clip_depth > 0);
+            self.clip_depth -= 1;
+            self.clip_pops += 1;
+        }
         fn pop_transparency_group(&mut self) {}
     }
 
@@ -56,6 +68,23 @@ mod device {
         assert_eq!(device.path[1], kurbo::PathEl::LineTo(kurbo::Point::new(12.0, 9.0)));
         execute_with(&mut device, content, InterpreterSettings::default()).unwrap();
         assert_eq!(device.path[1], kurbo::PathEl::LineTo(kurbo::Point::new(12.0001, 9.0)));
+    }
+
+    #[test]
+    fn verification_retains_page_and_nested_enclosing_clips_with_balanced_state() {
+        let content = "q 0 0 40 20 re W n q -10 -10 60 40 re W n 0 g 5 5 10 10 re f Q 20 5 10 10 re f Q 0 0 2 2 re f";
+        let mut ordinary = PathDevice::default();
+        execute_with(&mut ordinary, content, InterpreterSettings::default()).unwrap();
+        assert!(ordinary.clip_paths.is_empty());
+        assert_eq!(ordinary.paint_depths, [0, 0, 0]);
+        let mut retained = PathDevice::default();
+        execute_with(&mut retained, content, InterpreterSettings { preserve_clip_paths: true, ..Default::default() }).unwrap();
+        assert_eq!(retained.clip_paths, [Rect::new(0.0, 0.0, 40.0, 20.0), Rect::new(-10.0, -10.0, 50.0, 30.0)]);
+        assert_eq!(retained.paint_depths, [2, 1, 0]);
+        assert_eq!(retained.clip_pops, 2);
+        assert_eq!(retained.clip_depth, 0);
+        assert_eq!(ordinary.paths, retained.paths);
+        assert_eq!(ordinary.path, retained.path);
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]

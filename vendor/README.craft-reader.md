@@ -56,3 +56,10 @@ The snapshot also preserves PdfCraft #1477 (WinAnsi Unicode fallback for TrueTyp
 fonts without Encoding) and #1499 (byte-aligned packed TIFF predictor rows).
 Synthetic tests cover 1/2/4/8-bit RGB rows and rendering, plus embedded TrueType
 text with absent or partial ToUnicode maps and explicit encoding precedence.
+
+Verification callers can opt into `InterpreterSettings::preserve_clip_paths` to
+retain callbacks for rectangular clips that enclose the current bounds. The
+normal renderer default still elides them. Retained clips use the existing
+balanced graphics-state stack and bounds intersection; this does not change
+paint geometry or manufacture missing content. An original synthetic regression
+covers a page-wide clip, a nested enclosing clip, and painting after both restores.
