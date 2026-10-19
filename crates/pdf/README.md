@@ -230,3 +230,13 @@ Zero-length round-capped strokes are emitted as PDF strokes instead of discarded
 Synthetic reader/writer contracts cover repeated vertices, fractional path and
 clip coordinates, placement matrices, invalid coordinates and round dot strokes.
 No source-PDF pass-through or production profile policy is implemented here.
+
+### Literal string bytes
+
+The reader normalizes each unescaped LF, CR or CRLF marker inside a literal string
+to one LF byte. A backslash continuation consumes only its own marker, retaining
+subsequent line breaks. This preserves binary lookup-table bytes as well as text.
+`tests/literal_strings.rs` exercises adjacent marker combinations, continuations,
+hexadecimal equivalence, escapes, binary bytes and nested parentheses through the
+public reader. These original fixtures follow ISO 32000-1, section 7.3.4.2; see the
+[public specification](https://pdfa.org/resource/iso-32000-1/).

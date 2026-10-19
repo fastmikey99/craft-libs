@@ -5,7 +5,7 @@ use crate::filter::ascii_hex;
 use crate::object::Object;
 use crate::object::macros::object;
 use crate::reader::Reader;
-use crate::reader::{Readable, ReaderContext, ReaderExt, Skippable};
+use crate::reader::{Readable, ReaderContext, Skippable};
 use crate::trivia::is_white_space_character;
 use alloc::vec::Vec;
 use core::borrow::Borrow;
@@ -240,25 +240,23 @@ fn read_literal<'a>(r: &mut Reader<'a>) -> Option<StringInner<'a>> {
                         b')' => result.push(b')'),
                         b'\\' => result.push(b'\\'),
                         b'\n' | b'\r' => {
-                            // A conforming reader shall disregard the REVERSE SOLIDUS
-                            // and the end-of-line marker following it when reading
-                            // the string; the resulting string value shall be
-                            // identical to that which would be read if the string
-                            // were not split.
-                            r.skip_eol_characters();
+                            // Only the escaped marker is a continuation. A CRLF pair
+                            // is one marker; later newlines are still string data.
+                            if next == b'\r' && r.peek_byte() == Some(b'\n') {
+                                r.forward();
+                            }
                         }
                         _ => result.push(next),
                     }
                 }
             }
             b'(' | b')' => result.push(byte),
-            // An end-of-line marker appearing within a literal string
-            // without a preceding REVERSE SOLIDUS shall be treated as
-            // a byte value of (0Ah), irrespective of whether the end-of-line
-            // marker was a CARRIAGE RETURN (0Dh), a LINE FEED (0Ah), or both.
+            // Normalize each distinct marker to LF, consuming at most one CRLF pair.
             b'\n' | b'\r' => {
                 result.push(b'\n');
-                r.skip_eol_characters();
+                if byte == b'\r' && r.peek_byte() == Some(b'\n') {
+                    r.forward();
+                }
             }
             other => result.push(other),
         }

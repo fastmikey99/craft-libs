@@ -251,7 +251,9 @@ impl<'a> Context<'a> {
         fill: FillRule,
         device: &mut impl Device<'a>,
     ) {
-        if let Some(clip_rect) = path_as_rect(&clip_path) {
+        if !self.settings.preserve_clip_paths
+            && let Some(clip_rect) = path_as_rect(&clip_path)
+        {
             let cur_bbox = self.bbox();
 
             // If the clip path is a rect and completely covers the current bbox, don't emit it.
