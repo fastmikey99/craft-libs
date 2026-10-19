@@ -239,4 +239,4 @@ subsequent line breaks. This preserves binary lookup-table bytes as well as text
 `tests/literal_strings.rs` exercises adjacent marker combinations, continuations,
 hexadecimal equivalence, escapes, binary bytes and nested parentheses through the
 public reader. These original fixtures follow ISO 32000-1, section 7.3.4.2; see the
-[public specification](https://developer.adobe.com/document-services/docs/assets/35e4369068f86065372c18787171a17e/PDF_ISO_32000-1.pdf).
+[public specification](https://pdfa.org/resource/iso-32000-1/).
